@@ -1,10 +1,5 @@
 <?php
 
-class JsonDB_Document{
-	public function __construct( ) {}
-}
-
-
 class JsonDB_Collection{
 
 	public $data = array( );
@@ -66,20 +61,172 @@ class JsonDB_Collection{
 		return $clone;
 	}
 
-	public function insert( ) {
-		//JsonDB_ID::create()
+
+	public function insert( $document ) {
+		if(is_array($document)){
+			$document = $this->toOBJ($document);
+		}
+
+		if(!isset($document->{'_id'})){
+			$document->{'_id'} = JsonDB_ID::create();
+		}
+
+		if(!isset($document->{'updated_in'})){
+			$document->{'updated_in'} = TIMESTAMP;
+		}
+
+		if(!isset($document->{'created_in'})){
+			$document->{'created_in'} = TIMESTAMP;
+		}
+
+		$doc = $this->path . DIRECTORY_SEPARATOR . $document->{'_id'} . JsonDB::$extension;
+		$handle = fopen($doc, 'w');
+
+		try{
+            if (! flock($handle, LOCK_EX)){
+            	throw new JsonDbException("JsonCollection Error: Can't set file-lock");
+            }
+            	
+        	if(false === fwrite($handle, json_encode($document))){
+	       		throw new JsonDbException("JsonCollection Error: Can't write data to: ". $doc );
+	       	}
+        }
+        catch(Exception $e){
+            fclose($handle);
+            throw $e;
+        }
+
+        
+        return $this->get_data(array($this->clone_document($document)));
 	}
 
-	public function update( ) {
-		//JsonDB_ID::create()
+
+	public function save( $document ){
+		if(is_object($document)){
+			$document = $this->toArray($document, true);
+		}
+
+		if(isset($document['_id'])){
+			if(isset($document['created_in'])){
+				unset($document['created_in']);
+			}
+			if(isset($document['updated_in'])){
+				unset($document['updated_in']);
+			}
+
+			return $this->update($document, $document );
+		}else{
+			if(isset($document['created_in'])){
+				unset($document['created_in']);
+			}
+			if(isset($document['updated_in'])){
+				unset($document['updated_in']);
+			}
+
+			return $this->insert( $document );
+		}
 	}
 
-	public function delete( ) {
-		//JsonDB_ID::create()
+
+	public function update( $query = array(), $data ) {
+
+		$results = $this->find( $query );
+
+		foreach ($results->data as $document) {
+			$update = false;
+
+			foreach ($document as $key => $value) {
+				foreach ($data as $nkey => $nvalue) {
+					if($key === $nkey){
+						if(!is_string($value)){
+							$value = json_decode(json_encode($value), true);
+						}
+
+						if(json_encode($value) !== json_encode($nvalue)){
+							if(is_array($value) && is_array($nvalue)){
+								$update = true;
+								$document->{$key} = $this->toOBJ(array_merge($value, $nvalue));
+							}else{
+								$update = true;
+								$document->{$key} = $this->toOBJ($nvalue);
+							}
+						}
+					}else{
+						if(!isset($document->{$nkey})){
+							$update = true;
+							$document->{$nkey} =  $this->toOBJ($nvalue);
+						}
+					}
+				}
+			}
+
+			//refrash document
+			if( $update ){
+				unset($document->{'updated_in'});
+				$this->insert( $document );
+			}
+		}
+
+		$this->data = null;
+		return $this->find();
 	}
+
+
+	public function remove( $query, $justOne = false ) {
+		$results = $this->find( $query );
+
+		foreach ($results->data as $document ) {
+			if(isset($document->{'_id'})){
+				$doc = $this->path . DIRECTORY_SEPARATOR . $document->_id . JsonDB::$extension;
+				if(file_exists($doc)){
+					unlink($doc);
+					unset($document);
+
+					if( $justOne ){
+						$this->data = null;
+						return $this->find();
+					}
+				}
+			}
+		}
+
+		$this->data = null;
+		return $this->find();
+	}
+
+
+	public function drop() {
+		if ( $dh = opendir( $this->path ) ) {
+			//variavel onde será guardado todos os arquivos.
+			$results = array();
+
+			//pega todos os arquivos dentro do diretório
+			while ( ( $document = readdir( $dh ) ) !== false ) {
+				//se o arquivo não for uma pasta
+				if( ! is_dir( $document ) ) {
+					//pega somente os arquivos com a extensão específica
+					if( preg_match('/'. (JsonDB::$extension === '' ? '' : ('\\'.JsonDB::$extension) ) .'/', $document) ) {
+						//pega o caminho completo do documento
+						$file = $this->path . DIRECTORY_SEPARATOR . $document;
+
+						unlink( $file );
+					}
+				}
+			}
+
+			//fecha o diretório
+			closedir( $dh );
+
+			$this->data = null;
+		}
+
+
+		return $this->find();
+	}
+
 
 	//FIND IN FILES
-	protected function find_files( $query = NULL, array $projection = NULL) {
+	protected function find_files( $query = NULL, $projection = NULL) {
 		
 		//pega apenas o arquivo com o id especifico
 		if( isset( $query->{'_id'} ) ){
@@ -98,17 +245,17 @@ class JsonDB_Collection{
 				$content = json_decode( file_get_contents( $document ) );
 
 				//filtra os itens
-				if( count( $query ) ){
-					$result = $this->match( $query, $content );
+				if( count(get_object_vars($query)) ){
+					$content = $this->match( $query, $content );
 				}
 
 				//TEM RESULTADO E EXISTE FILTRO DE PROJECAO
-				if( count( $result ) && ! is_null( $projection ) ){
+				if( count( $content ) && ! is_null( $projection ) ){
 					//retorna o resultado filtrado.
-					$result = $this->only_keys( $result , $projection );
+					$content = $this->only_keys( $content , $projection );
 				}
 
-				return $result;
+				return array($this->clone_document($content));
 			}else{
 				//array vazio sem resultado algum
 				return array();
@@ -126,7 +273,7 @@ class JsonDB_Collection{
 					//se o arquivo não for uma pasta
 					if( ! is_dir( $document ) ) {
 						//pega somente os arquivos com a extensão específica
-						if( preg_match('/\\'. JsonDB::$extension .'/', $document) ) {
+						if( preg_match('/'. (JsonDB::$extension === '' ? '' : ('\\'.JsonDB::$extension) ) .'/', $document) ) {
 							//resultados
 							$doc = array();
 
@@ -146,17 +293,16 @@ class JsonDB_Collection{
 								}
 
 								if( count($doc) ){
-									array_push( $results , $doc );
+									array_push( $results , $this->clone_document($doc) );
 								}
 							}else{
-
 								if( ! is_null( $projection ) ){
 									//retorna o resultado filtrado.
 									$content = $this->only_keys( $content , $projection );
 								}
 
 								if( count($content) ){
-									array_push( $results , $content );
+									array_push( $results , $this->clone_document($content) );
 								}
 							}
 						}
@@ -197,7 +343,7 @@ class JsonDB_Collection{
 				}
 
 				if( count($doc) ){
-					array_push($results, $doc);
+					array_push($results, $this->clone_document($doc));
 				}
 			}
 
@@ -211,17 +357,17 @@ class JsonDB_Collection{
 	public function find( array $query = array(), array $projection = NULL) {
 		//first read
 		if( is_null( $this->data ) ) {
+			$result = $this->find_files( $this->toOBJ($query), $projection );
 
-			pre( 'FIND IN FILES' );
-
-			return $this->get_data( $this->find_files( $this->toOBJ($query), $projection ) );
+			//save result for later use
+			return $this->get_data( $result );
 		}
 		//second read
 		else{
-			pre( 'FIND IN DATA' );
+			$result = $this->find_in_data( $this->toOBJ($query), $projection );
 
 			//save result for later use
-			return $this->get_data( $this->find_in_data( $this->toOBJ($query), $projection ) );
+			return $this->get_data( $result );
 		}
 	}
 
@@ -235,20 +381,51 @@ class JsonDB_Collection{
 	}
 
 	//CURSOR METHODS
-	public function sort( array $order = array( ) ) { //array("key" => -1 ) for DESC or array("key" => 1) for ASC
-		return $this->get_data( $this->data);
+	public function sort( $key, $order = ASC ) { //array("key" => -1 ) for DESC or array("key" => 1) for ASC
+		//função dinâmica para ordenar os itens pela chave $key.
+		function lambda_filter_by($k){
+			return create_function('$a, $b', 'if(isset($a->'. $k .') && isset($b->'. $k .')){ if($a->'. $k .' == $b->'. $k .'){ return 0; } return ($a->'. $k .' < $b->'. $k .') ? -1 : 1; };');
+		}
+
+		//ordena os itens e chama a função lambda
+		//que retorna uma função de ordenação.
+		usort($this->data, lambda_filter_by($key));
+
+		//se a ordem for DECRESCENTE, inverte o array.
+		if($order) $this->data = array_reverse($this->data);
+
+		//retorna a coleção ordenada
+		return $this->get_data($this->data);
 	}
 
-	public function limit( $limit = false ) { //
-		return $this->get_data( $this->data);
+
+	public function limit( $limit = 0 ) { //
+		if($limit < 0){
+			$limit = 0;
+		}
+		if( $limit ){
+			return $this->get_data( array_slice($this->data, 0, $limit) );
+		}else{
+			return $this->get_data( $this->data );
+		}
 	}
+
 
 	public function skip( $index = false ) { //
-		return $this->get_data( $this->data);
+		if($index){
+			return $this->get_data( array_slice($this->data, $index) );
+		}else{
+			return $this->get_data( $this->data );
+		}
 	}
 
-	public function each( ) { //??
-		return $this->get_data( $this->data);
+	public function each( $callback ) {
+		foreach ($this->data as $key => $document) {
+			//$callback( $document , $key );
+			call_user_func_array($callback, array($document, $key));
+		}
+
+		return $this->get_data( $this->data );
 	}
 
 	public function toArray( ) {
@@ -268,10 +445,7 @@ class JsonDB_Collection{
 					if( is_object($d->{$key} ) || is_array($d->{$key}) ){
 						return JsonDB_Collection::recursive( $qs->{$key}, $d->{$key} );
 					}else{
-
-						pre($qs->{$key} == '*');
-
-						if(($qs->{$key} === $d->{$key})){
+						if(($qs->{$key} === $d->{$key}) || $qs->{$key} === '*'){
 							//return true;
 							array_push($result, true);
 						}else{
@@ -284,11 +458,11 @@ class JsonDB_Collection{
 					array_push($result, null);
 				}
 			}
-		}/*else{
+		}else{
 			if($qs == '*'){
 				array_push($result, true);
 			}
-		}*/
+		}
 
 		return $result;
 	}
@@ -299,7 +473,7 @@ class JsonDB_Collection{
 		$results = array_unique(JsonDB_Collection::recursive( $queries, $document ) );
 
 		if(count($results) === 1 ? $results[0] : false){
-			return $document;
+			return $this->clone_document($document);
 		}else{
 			return array();
 		}
@@ -315,6 +489,6 @@ class JsonDB_Collection{
 	}
 
 	public function __toString( ) {
-		return json_encode( $this->data);
+		return json_encode( $this->data );
 	}
 }

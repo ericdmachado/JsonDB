@@ -3,6 +3,13 @@
 class JsonDB_ID {
 
     public static function create( ) {
+
+        if(!function_exists('gethostname')){
+            function gethostname(){
+                return php_uname('n');
+            }
+        }
+
         // Return JsonID
         $binaryTimestamp = substr(microtime(true), -4);
         $machineId       = substr(md5(uniqid(rand() . gethostname())), -3);

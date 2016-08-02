@@ -2,11 +2,12 @@
 
 define('ASC', false);
 define('DESC', true);
-define('TIMESTAMP', time());
+define('TIMESTAMP', microtime(true));
 
 
 require_once('jsondb_exception.php');
 require_once('jsondb_id.php');
+require_once('jsondb_document.php');
 require_once('jsondb_collection.php');
 require_once('jsondb_commons.php');
 require_once('jsondb_performance.php');
@@ -19,7 +20,6 @@ class JsonDB {
 
 	public $database_path;
 	public $collection_path;
-
 
 	public function __construct( $path ){
 		
@@ -106,6 +106,10 @@ class JsonDB {
 		        unlink($file->getRealPath());
 		    }
 		}
+	}
+
+	public function set_extension( $extension='.json' ){
+		JsonDB::$extension = $extension;
 	}
 
 	public function listCommands(){
