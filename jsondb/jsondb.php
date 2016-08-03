@@ -21,19 +21,32 @@ class JsonDB {
 	public $collection_path;
 
 	public function __construct( $path ){
-		
-		$this->db_name = $path;
-		
-		$path = realpath( $path );
-        if ( ! is_dir( $path ) ) {
-            throw new JsonDB_Exception('Path not found');
+		$this->setDatabasePath( $path );
+	}
 
-        }
-        if ( ! is_writeable($path) ) {
-        	chmod($path, 0777);
-        }
 
-        $this->database_path = $path;
+	public function setDatabasePath( $path ){
+
+		if(preg_match('/\\\|\//', $path)){
+			if(preg_match('/\\\/', $path)){
+				$this->db_name = substr($path, strrpos($path, '\\')+1);
+				$this->database_path = substr($path, 0, strrpos($path, '\\')+1);
+			}else{
+				$this->db_name = substr($path, strrpos($path, '/')+1);
+				$this->database_path = substr($path, 0, strrpos($path, '/')+1);
+			}
+		}else{
+			$this->db_name = $path;
+			$this->database_path = realpath( $path );
+		}
+
+		if ( ! is_dir( $this->database_path ) ) {
+	            throw new JsonDB_Exception('Path not found');
+	
+	        }
+	        if ( ! is_writeable( $this->database_path ) ) {
+	        	chmod($this->database_path, 0777);
+	        }
 	}
 
 
