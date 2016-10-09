@@ -143,13 +143,8 @@ class JsonDB_Collection{
 						}
 
 						if(json_encode($value) !== json_encode($nvalue)){
-							if(is_array($value) && is_array($nvalue)){
-								$update = true;
-								$document->{$key} = $this->toOBJ(array_merge($value, $nvalue));
-							}else{
-								$update = true;
-								$document->{$key} = $this->toOBJ($nvalue);
-							}
+							$update = true;
+							$document->{$key} = $this->toOBJ($nvalue);
 						}
 					}else{
 						if(!isset($document->{$nkey})){
