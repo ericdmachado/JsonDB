@@ -479,7 +479,6 @@ class JsonDB_Collection{
 	}
 
 	public function pretty( ) {
-		pre( $this->data);
 		return $this->__toString();
 	}
 
