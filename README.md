@@ -25,7 +25,7 @@ Para começar, será necessário informar o caminho onde estará a pasta do seu 
 
      $something = $db->produto->find();
      
-     print_r($somethin);
+     print_r($something);
 
 ## Update
 
@@ -45,7 +45,7 @@ Para começar, será necessário informar o caminho onde estará a pasta do seu 
 ## Outras funções
 #### Get Collection Names
 
-    $db->getCollectionNames()
+    $db->getCollectionNames();
 
 #### List Commands
 
