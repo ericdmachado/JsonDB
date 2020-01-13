@@ -77,7 +77,7 @@ class JsonDB {
 				$path = $this->database_path . DIRECTORY_SEPARATOR . $collection;
 
 				//se o arquivo for uma pasta
-				if( is_dir( $path ) && ! preg_match('/\\./', $path ) ){
+				if( is_dir( $path ) && ! preg_match('/^\\./', $collection ) ){
 					array_push( $collections, $collection );
 				}
 			}
