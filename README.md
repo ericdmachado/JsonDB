@@ -1,7 +1,7 @@
 # JsonDB
 
 Biblioteca em PHP que transforma aquivos .json em um database estilo MongoDB.
-Cada Collection é armazenada em um arquivo único. Podendo ser consultada de uma forma mais rápida.
+Cada Collection é armazenada em um arquivo único, podendo ser consultada de uma forma mais rápida.
 
 
 ![enter image description here](http://gereon.com.br/jsondb/json_db.png)
